@@ -59,7 +59,7 @@ where
 
     fn restore(source: &mut Source<H>) -> io::Result<Self> {
         let mut avl: AVL<K, V, A, H> = AVL::default();
-        for _ in 0..len {
+        for _ in 0..N_NODES {
             avl.0.push(Handle::restore(source)?);
         }
 
