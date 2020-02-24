@@ -9,8 +9,8 @@ use std::mem;
 use arrayvec::ArrayVec;
 
 use kelvin::{
-    Annotation, ByteHash, Compound, Content, Handle, HandleMut, HandleType,
-    Method, SearchResult, Sink, Source, KV,
+    Annotation, ByteHash, Compound, Content, Handle, HandleMut, HandleType, Method, SearchResult,
+    Sink, Source, KV,
 };
 
 const N_NODES: usize = 2;
@@ -153,6 +153,7 @@ where
         self._insert_and_rebalance(KV::new(k, v))
     }
 
+    // TODO: should we hash the key first?
     fn _insert_and_rebalance(&mut self, handle: KV<K, V>) -> io::Result<()> {
         /// Use an enum to get around borrow issues
         #[derive(Debug)]
@@ -176,7 +177,7 @@ where
             },
             // We got a result for this specific node/leaf
             _ => {
-                let mut kv = self.annotation().expect("wtf");
+                let mut kv = self.annotation().expect("annotation should exist");
                 mem::replace(&mut kv, A::from(&handle));
                 return Ok(());
             }
@@ -185,7 +186,7 @@ where
         match action {
             Action::InsertNode(i) => {
                 let new_avl = AVL::default();
-                let mut kv = new_avl.annotation().expect("wtf");
+                let mut kv = new_avl.annotation().expect("annotation should exist");
                 mem::replace(&mut kv, A::from(&handle));
                 let h = Handle::new_node(new_avl);
                 mem::replace(&mut self.0[i], h);
@@ -252,25 +253,24 @@ where
                             // Just replace the current node annotation with this leaf
                             action = Action::Replace;
                         }
-                        _ => panic!("wtf"),
+                        _ => panic!("right-hand child can not be none"),
                     }
 
                     match action {
                         Action::Replace => {
                             let leaf_kv = self.0[1].clone().into_leaf();
-                            let mut kv = self.annotation().expect("wtf");
+                            let mut kv = self.annotation().expect("annotation should exist");
                             mem::replace(&mut kv, A::from(&leaf_kv));
                         }
                         Action::Move => {
-                            let successor =
-                                self.0[1].clone().into_node().min_node();
+                            let successor = self.0[1].clone().into_node().min_node();
                             // Does this successor have a right-hand child?
                             // If so, it should replace the successor
                             match successor.handle_type() {
                                 HandleType::Leaf => {
                                     let leaf_kv = successor.into_leaf();
                                     let mut kv =
-                                        self.annotation().expect("wtf");
+                                        self.annotation().expect("annotation should exist");
                                     mem::replace(&mut kv, A::from(&leaf_kv));
                                 }
                                 HandleType::Node => {
@@ -279,36 +279,28 @@ where
                                         .clone()
                                         .into_node()
                                         .annotation()
-                                        .expect("wtf");
+                                        .expect("annotation should exist");
                                     let mut kv =
-                                        self.annotation().expect("wtf");
+                                        self.annotation().expect("annotation should exist");
                                     mem::replace(&mut kv, node_kv);
 
                                     // Now, replace the successor with it's right-hand child
                                     let mut node = successor.into_node();
                                     match node.0[1].handle_type() {
                                         HandleType::Leaf => {
-                                            let leaf_kv =
-                                                node.0[1].clone().into_leaf();
+                                            let leaf_kv = node.0[1].clone().into_leaf();
                                             let mut kv =
-                                                node.annotation().expect("wtf");
-                                            mem::replace(
-                                                &mut kv,
-                                                A::from(&leaf_kv),
-                                            );
+                                                node.annotation().expect("annotation should exist");
+                                            mem::replace(&mut kv, A::from(&leaf_kv));
                                         }
                                         HandleType::Node => {
-                                            let replacement =
-                                                node.0[1].clone().into_node();
-                                            mem::replace(
-                                                &mut node,
-                                                replacement,
-                                            );
+                                            let replacement = node.0[1].clone().into_node();
+                                            mem::replace(&mut node, replacement);
                                         }
-                                        _ => panic!("wtf"),
+                                        _ => panic!("successor should never be none"),
                                     }
                                 }
-                                _ => panic!("why"),
+                                _ => panic!("successor should never be none"),
                             }
                         }
                         _ => {}
@@ -322,11 +314,8 @@ where
                     match self.0[0].handle_type() {
                         HandleType::Leaf => {
                             let new_avl: AVL<K, V, A, H> = AVL::default();
-                            let mut kv = new_avl.annotation().expect("wtf");
-                            mem::replace(
-                                &mut kv,
-                                A::from(&self.0[0].clone().into_leaf()),
-                            );
+                            let mut kv = new_avl.annotation().expect("annotation should exist");
+                            mem::replace(&mut kv, A::from(&self.0[0].clone().into_leaf()));
                             mem::replace(self, new_avl);
                         }
 
@@ -343,11 +332,8 @@ where
                 match self.0[1].handle_type() {
                     HandleType::Leaf => {
                         let new_avl: AVL<K, V, A, H> = AVL::default();
-                        let mut kv = new_avl.annotation().expect("wtf");
-                        mem::replace(
-                            &mut kv,
-                            A::from(&self.0[1].clone().into_leaf()),
-                        );
+                        let mut kv = new_avl.annotation().expect("annotation should exist");
+                        mem::replace(&mut kv, A::from(&self.0[1].clone().into_leaf()));
                         mem::replace(self, new_avl);
                     }
 
@@ -401,6 +387,7 @@ where
     fn rebalance(&mut self) -> io::Result<()> {
         let balance_factor = self.get_balance_factor();
 
+        // TODO: implement correct rotations based on balance factor
         if balance_factor < -1 {
             unimplemented!();
         }
@@ -420,8 +407,7 @@ where
         for i in 0..N_NODES {
             let depths = get_depths(&self.0[i]);
 
-            left_right_depth[i] =
-                *depths.iter().max().expect("should always be two depths");
+            left_right_depth[i] = *depths.iter().max().expect("should always be two depths");
         }
 
         left_right_depth[1] - left_right_depth[0]
@@ -447,7 +433,7 @@ where
             Action::RotateLeaf => {
                 // Create a new node with this leaf's annotation
                 let mut new_avl = AVL::default();
-                let mut kv = new_avl.annotation().expect("wtf");
+                let mut kv = new_avl.annotation().expect("annotation should exist");
                 mem::replace(&mut kv, A::from(&self.0[1].clone().into_leaf()));
 
                 // Remove the child from `self`
@@ -497,7 +483,7 @@ where
             Action::RotateLeaf => {
                 // Create a new node with this leaf's annotation
                 let mut new_avl = AVL::default();
-                let mut kv = new_avl.annotation().expect("wtf");
+                let mut kv = new_avl.annotation().expect("annotation should exist");
                 mem::replace(&mut kv, A::from(&self.0[0].clone().into_leaf()));
 
                 // Remove the child from `self`
@@ -527,6 +513,7 @@ where
         }
     }
 
+    // TODO: implement LeftRight and RightLeft rotations
     fn rotate_left_right(&mut self) -> io::Result<()> {
         unimplemented!();
     }
