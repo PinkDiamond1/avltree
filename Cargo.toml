@@ -1,0 +1,13 @@
+[package]
+authors = ["Jules de Smit <jules@dusk.network>"]
+description = "AVL Tree data structure"
+edition = "2018"
+license = "MPL-2.0"
+name = "kelvin-avl"
+repository = "https://github.com/julesdesmit/avltree"
+keywords = ["datastructure", "kelvin", "avltree"]
+version = "0.1.0"
+
+[dependencies]
+kelvin = "0.11"
+arrayvec = "0.5"
