@@ -45,10 +45,6 @@ where
     H: ByteHash,
 {
     fn persist(&mut self, sink: &mut Sink<H>) -> io::Result<()> {
-        // Denote the length of the AVL tree first, so we can
-        // restore it properly.
-        (self.0.len() as u8).persist(sink)?;
-
         self.0
             .iter_mut()
             .filter_map(|handle| {
@@ -63,7 +59,6 @@ where
 
     fn restore(source: &mut Source<H>) -> io::Result<Self> {
         let mut avl: AVL<K, V, A, H> = AVL::default();
-        let len = u8::restore(source)?;
         for _ in 0..len {
             avl.0.push(Handle::restore(source)?);
         }
